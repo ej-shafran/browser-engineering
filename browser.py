@@ -84,14 +84,27 @@ class URL:
 
 
 def show(body: str):
+    entities = {"&lt;": "<", "&gt;": ">"}
     in_tag = False
-    for c in body:
-        if c == "<":
+    i = 0
+    body_len = len(body)
+    while i < body_len:
+        c = body[i]
+        if c == "&":
+            end_index = body.find(";", i + 1)
+            entity = body[i:end_index + 1]
+            if end_index == -1 or entities.get(entity) is None:
+                print(c, end="")
+            else:
+                print(entities.get(entity), end="")
+                i = end_index
+        elif c == "<":
             in_tag = True
         elif c == ">":
             in_tag = False
         elif not in_tag:
             print(c, end="")
+        i += 1
 
 
 def load(url: URL):
