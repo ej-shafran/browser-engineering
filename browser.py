@@ -5,11 +5,16 @@ import ssl
 class URL:
     def __init__(self, url: str):
         self.scheme, url = url.split(":", 1)
-        assert self.scheme in ["http", "https", "file", "data"]
+        assert self.scheme in ["http", "https", "file", "data", "view-source"]
 
         if self.scheme == "data":
             self.datatype, self.data = url.split(",", 1)
             assert self.datatype == "text/html"
+            return
+
+        if self.scheme == "view-source":
+            self.inner_url = URL(url)
+            assert not self.inner_url.scheme in ["data", "view-source"]
             return
 
         url = url.replace("//", "", 1)
@@ -39,6 +44,9 @@ class URL:
             f = open(self.filename)
             content = f.read()
             return content
+
+        if self.scheme == "view-source":
+            return self.inner_url.request()
 
         # Open socket connection
         s = socket.socket(
@@ -109,7 +117,10 @@ def show(body: str):
 
 def load(url: URL):
     body = url.request()
-    show(body)
+    if url.scheme == "view-source":
+        print(body, end="")
+    else:
+        show(body)
 
 
 if __name__ == "__main__":
