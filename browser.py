@@ -101,7 +101,7 @@ def show(body: str):
         if c == "&":
             end_index = body.find(";", i + 1)
             entity = body[i:end_index + 1]
-            if end_index == -1 or entities.get(entity) is None:
+            if end_index == -1 or not entity in entities:
                 print(c, end="")
             else:
                 print(entities.get(entity), end="")
