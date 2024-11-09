@@ -1,6 +1,8 @@
 import socket
 import ssl
 
+sockets = {}
+
 
 class URL:
     def __init__(self, url: str):
@@ -49,20 +51,23 @@ class URL:
             return self.inner_url.request()
 
         # Open socket connection
-        s = socket.socket(
-            family=socket.AF_INET,
-            type=socket.SOCK_STREAM,
-            proto=socket.IPPROTO_TCP
-        )
-        s.connect((self.host, self.port))
-        if self.scheme == "https":
-            ctx = ssl.create_default_context()
-            s = ctx.wrap_socket(s, server_hostname=self.host)
+        s = sockets.get((self.host, self.port, self.scheme))
+        if s is None:
+            s = socket.socket(
+                family=socket.AF_INET,
+                type=socket.SOCK_STREAM,
+                proto=socket.IPPROTO_TCP
+            )
+            s.connect((self.host, self.port))
+            if self.scheme == "https":
+                ctx = ssl.create_default_context()
+                s = ctx.wrap_socket(s, server_hostname=self.host)
+            sockets[(self.host, self.port, self.scheme)] = s
 
         # Send request (as bytes)
         request_headers = [
             ("Host", self.host),
-            ("Connection", "close"),
+            ("Connection", "keep-alive"),
             ("User-Agent", "ej-browser")
         ]
         request = f"GET {self.path} HTTP/1.0\r\n"
@@ -87,7 +92,9 @@ class URL:
         # Ensure no tricky headers have been sent down
         assert "transfer-encoding" not in response_headers
         assert "content-encoding" not in response_headers
-        content = response.read()
+        assert "content-length" in response_headers
+        content_length = int(response_headers["content-length"])
+        content = response.read(content_length)
         return content
 
 
@@ -125,4 +132,5 @@ def load(url: URL):
 
 if __name__ == "__main__":
     import sys
-    load(URL(sys.argv[1]))
+    for arg in sys.argv[1:]:
+        load(URL(arg))
