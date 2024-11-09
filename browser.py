@@ -5,6 +5,8 @@ sockets = {}
 
 
 class URL:
+    redirect_count = 0
+
     def __init__(self, url: str):
         self.scheme, url = url.split(":", 1)
         assert self.scheme in ["http", "https", "file", "data", "view-source"]
@@ -80,6 +82,7 @@ class URL:
         # Read version, status, and explanation
         statusline = response.readline()
         version, status, explanation = statusline.split(" ", 2)
+        status = int(status)
         # Read headers
         response_headers = {}
         while True:
@@ -89,6 +92,17 @@ class URL:
             header, value = line.split(":", 1)
             # Headers are case insensitive
             response_headers[header.casefold()] = value.strip()
+
+        if status >= 300 and status < 400:
+            assert "location" in response_headers
+            location = response_headers["location"]
+            if location.startswith("/"):
+                location = f"{self.scheme}://{self.host}{location}"
+            url = URL(location)
+            url.redirect_count += 1
+            assert url.redirect_count < 1024
+            return url.request()
+
         # Ensure no tricky headers have been sent down
         assert "transfer-encoding" not in response_headers
         assert "content-encoding" not in response_headers
