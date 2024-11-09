@@ -1,7 +1,22 @@
 import socket
 import ssl
+import datetime
 
 sockets = {}
+cached_responses = {}
+
+
+class CacheValue:
+    def __init__(self, value, max_age):
+        self.value = value
+        self.max_age = max_age
+        self.cache_time = datetime.datetime.now()
+
+    def expired(self):
+        if self.max_age is None:
+            return False
+
+        return self.cache_time + datetime.timedelta(seconds=self.max_age) <= datetime.datetime.now()
 
 
 class URL:
@@ -51,6 +66,10 @@ class URL:
 
         if self.scheme == "view-source":
             return self.inner_url.request()
+
+        from_cache = response_from_cache(self)
+        if from_cache is not None:
+            return from_cache
 
         # Open socket connection
         s = sockets.get((self.host, self.port, self.scheme))
@@ -109,7 +128,36 @@ class URL:
         assert "content-length" in response_headers
         content_length = int(response_headers["content-length"])
         content = response.read(content_length)
+        store_in_cache(self, content, response_headers.get("cache-control"))
         return content
+
+
+def response_from_cache(url: URL):
+    cached = cached_responses.get(
+        (url.scheme, url.host, url.port, url.path))
+    if cached is None:
+        return None
+
+    if cached.expired():
+        del cached_responses[(url.scheme, url.host, url.port, url.path)]
+        return None
+
+    return cached.value
+
+
+def store_in_cache(url: URL, content: str, cache_control: str):
+    if cache_control is not None and not cache_control.startswith("max-age="):
+        return
+
+    max_age = None
+    if cache_control is not None:
+        _, max_age = cache_control.split("=", 1)
+        max_age = int(max_age)
+
+    cached_responses[(url.scheme, url.host, url.port, url.path)
+                     ] = CacheValue(content, max_age)
+
+    return content
 
 
 def show(body: str):
