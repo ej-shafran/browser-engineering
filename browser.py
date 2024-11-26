@@ -1,6 +1,7 @@
 import socket
 import ssl
 import datetime
+import gzip
 
 sockets = {}
 cached_responses = {}
@@ -89,7 +90,8 @@ class URL:
         request_headers = [
             ("Host", self.host),
             ("Connection", "keep-alive"),
-            ("User-Agent", "ej-browser")
+            ("User-Agent", "ej-browser"),
+            ("Accept-Encoding", "gzip")
         ]
         request = f"GET {self.path} HTTP/1.0\r\n"
         for (header, value) in request_headers:
@@ -97,15 +99,15 @@ class URL:
         request += "\r\n"
         s.send(request.encode("utf8"))
         # Read response into file-like object
-        response = s.makefile("r", encoding="utf8", newline="\r\n")
+        response = s.makefile("rb", newline="\r\n")
         # Read version, status, and explanation
-        statusline = response.readline()
+        statusline = response.readline().decode("utf-8")
         version, status, explanation = statusline.split(" ", 2)
         status = int(status)
         # Read headers
         response_headers = {}
         while True:
-            line = response.readline()
+            line = response.readline().decode("utf-8")
             if line == "\r\n":
                 break
             header, value = line.split(":", 1)
@@ -124,10 +126,18 @@ class URL:
 
         # Ensure no tricky headers have been sent down
         assert "transfer-encoding" not in response_headers
-        assert "content-encoding" not in response_headers
+
+        # Ensure valid content encoding
+        is_gzip = response_headers.get("content-encoding") == "gzip"
+
+        assert "content-encoding" not in response_headers or is_gzip
+
         assert "content-length" in response_headers
         content_length = int(response_headers["content-length"])
         content = response.read(content_length)
+        if is_gzip:
+            content = gzip.decompress(content)
+        content = content.decode("utf-8")
         store_in_cache(self, content, response_headers.get("cache-control"))
         return content
 
