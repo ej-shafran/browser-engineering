@@ -93,7 +93,7 @@ class URL:
             ("User-Agent", "ej-browser"),
             ("Accept-Encoding", "gzip")
         ]
-        request = f"GET {self.path} HTTP/1.0\r\n"
+        request = f"GET {self.path} HTTP/1.1\r\n"
         for (header, value) in request_headers:
             request += f"{header}: {value}\r\n"
         request += "\r\n"
